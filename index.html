@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pulse from Pixels — webcam heart rate (rPPG)</title>
+    <meta
+      name="description"
+      content="Measure your heart rate from your webcam in the browser using remote photoplethysmography (rPPG, POS algorithm). 100% client-side."
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Pulse from Pixels</h1>
+      <p class="tagline">
+        Your heartbeat, read from tiny color changes in your skin —
+        <abbr title="remote photoplethysmography">rPPG</abbr> via the POS algorithm,
+        running entirely in your browser.
+      </p>
+    </header>
+
+    <main>
+      <section class="stage" id="stage">
+        <div class="video-wrap">
+          <video id="video" playsinline muted></video>
+          <canvas id="overlay"></canvas>
+        </div>
+        <button id="startBtn" class="start">▶ Start camera</button>
+      </section>
+
+      <aside class="panel">
+        <p id="status" class="status" data-kind="info">
+          Click “Start camera”. Nothing leaves your device.
+        </p>
+
+        <h2>Faces</h2>
+        <ul id="faces" class="faces">
+          <li class="empty">No faces yet.</li>
+        </ul>
+
+        <h2>Pulse waveform</h2>
+        <canvas id="wave" class="wave"></canvas>
+
+        <details class="how">
+          <summary>How it works &amp; tips</summary>
+          <p>
+            Each heartbeat pushes blood through the skin, subtly changing how much
+            light it reflects. We average the color of your forehead and cheeks
+            across video frames, isolate the pulse with the
+            <strong>POS (Plane-Orthogonal-to-Skin)</strong> algorithm, and find its
+            frequency to get beats-per-minute.
+          </p>
+          <ul>
+            <li>Sit still and face even, bright light (avoid backlight).</li>
+            <li>Give it ~10&nbsp;seconds to warm up.</li>
+            <li>It's a fun estimate — <strong>not a medical device</strong>.</li>
+          </ul>
+          <p class="privacy">
+            🔒 All processing happens locally in your browser. No video, image, or
+            measurement is ever uploaded.
+          </p>
+        </details>
+      </aside>
+    </main>
+
+    <footer>
+      <span>Method: remote photoplethysmography (rPPG), POS — Wang et&nbsp;al., IEEE&nbsp;TBME&nbsp;2017.</span>
+      <span>Face tracking: MediaPipe FaceLandmarker.</span>
+    </footer>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
