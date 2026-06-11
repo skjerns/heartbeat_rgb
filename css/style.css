@@ -66,18 +66,44 @@ main {
   overflow: hidden;
 }
 #video,
-#overlay {
+#overlay,
+#magnified {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
-/* Mirror the video for a natural selfie view. The overlay flips coordinates in
-   code instead, so its text stays readable. */
-#video {
+/* Mirror the video (and the magnified copy) for a natural selfie view. The
+   overlay flips coordinates in code instead, so its text stays readable. */
+#video,
+#magnified {
   object-fit: cover;
   transform: scaleX(-1);
 }
+#magnified { background: #000; }
+
+.magnified {
+  margin: 0;
+  width: 100%;
+  display: none;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.stage.live .magnified { display: flex; }
+.magnified figcaption {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.magnified .amp {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.magnified .amp input { flex: 1; max-width: 240px; accent-color: var(--accent); }
 
 .start {
   font-size: 1.05rem;

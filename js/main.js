@@ -2,6 +2,7 @@
 
 import { createDetector, FaceTracker } from './face.js';
 import { grabFrame, sampleFace, roiRects } from './roi.js';
+import { ColorMagnifier } from './magnify.js';
 import { runSelfTest } from './selftest.js';
 
 const UPDATE_EVERY = 15; // recompute BPM every N frames
@@ -14,9 +15,18 @@ const els = {
   status: document.getElementById('status'),
   faces: document.getElementById('faces'),
   stage: document.getElementById('stage'),
+  magnified: document.getElementById('magnified'),
+  ampRange: document.getElementById('ampRange'),
 };
 
 const tracker = new FaceTracker();
+const magnifier = new ColorMagnifier();
+if (els.ampRange) {
+  magnifier.alpha = Number(els.ampRange.value);
+  els.ampRange.addEventListener('input', () => {
+    magnifier.alpha = Number(els.ampRange.value);
+  });
+}
 let detector = null;
 let frameIdx = 0;
 let running = false;
@@ -71,6 +81,8 @@ function sizeCanvases() {
   const h = els.video.videoHeight;
   els.overlay.width = w;
   els.overlay.height = h;
+  els.magnified.width = w;
+  els.magnified.height = h;
   els.wave.width = els.wave.clientWidth || 480;
   els.wave.height = els.wave.clientHeight || 120;
 }
@@ -94,6 +106,7 @@ function loop() {
     }
 
     drawOverlay(active);
+    magnifier.process(els.video, active, els.magnified);
     drawWave(active);
     updatePanel(active);
   }

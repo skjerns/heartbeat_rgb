@@ -27,6 +27,20 @@
           <canvas id="overlay"></canvas>
         </div>
         <button id="startBtn" class="start">▶ Start camera</button>
+
+        <figure class="magnified" id="magWrap">
+          <figcaption>
+            Pulse-amplified view — the subtle color changes on faces with a
+            detected beat are exaggerated so you can <em>see</em> the heartbeat.
+          </figcaption>
+          <div class="video-wrap">
+            <canvas id="magnified"></canvas>
+          </div>
+          <label class="amp">
+            Amplification
+            <input id="ampRange" type="range" min="0" max="150" value="50" />
+          </label>
+        </figure>
       </section>
 
       <aside class="panel">
