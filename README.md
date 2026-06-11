@@ -27,8 +27,27 @@ Face detection / ROI selection (forehead + cheeks) uses Google's
 **[MediaPipe FaceLandmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker/web_js)**,
 which also runs in-browser via WASM and supports multiple faces.
 
+A second **pulse-amplified view** uses real-time Eulerian color magnification
+(Wu et al., SIGGRAPH 2012) to exaggerate the color pulsing on faces with a
+detected beat, so you can *see* the heartbeat.
+
 > ⚠️ This is a fun estimate, **not a medical device**. Accuracy depends on
 > lighting, stillness, skin visibility, and webcam quality.
+
+### Accuracy techniques
+
+To tighten the estimate, the pipeline:
+
+- **Locks the camera's auto-exposure and white-balance** (where supported) so
+  the camera stops "correcting" the very signal we measure.
+- **Resamples the RGB onto a uniform time grid** before the FFT — `rAF` frame
+  timing is jittery, which would otherwise smear the spectral peak.
+- **Averages only skin-colored pixels** (YCbCr test) inside the forehead/cheek
+  ROIs, excluding brows, lips, hair, and background.
+- Uses **Welch spectral averaging** over a longer (14 s) window for a steadier,
+  lower-variance estimate.
+- **Tracks the pulse frequency** with a harmonic guard, so the reading doesn't
+  snap to 2× / ½× the true rate or jump on a transient.
 
 ## Project layout
 

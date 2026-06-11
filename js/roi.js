@@ -77,9 +77,20 @@ export function roiRects(landmarks) {
   return [forehead, cheek(LM.cheekL), cheek(LM.cheekR)];
 }
 
-// Sample mean RGB over the given face's ROIs from the current sampling canvas.
-// Returns { r, g, b } in 0..255, or null if the regions are degenerate / off
-// frame (e.g. face partly outside the view).
+// Skin test in YCbCr (Hsu et al.) — robust to illumination and excludes
+// eyebrows, lips, background, and shadows that would otherwise add noise.
+function isSkin(r, g, b) {
+  const y = 0.299 * r + 0.587 * g + 0.114 * b;
+  const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+  const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+  return cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173 && y > 40 && y < 250;
+}
+
+const MIN_SKIN_PIXELS = 40; // require enough skin to trust the sample
+
+// Sample mean RGB over the given face's ROIs from the current sampling canvas,
+// averaging only skin-colored pixels. Returns { r, g, b } in 0..255, or null if
+// the regions are degenerate / off frame / lack enough visible skin.
 export function sampleFace(landmarks) {
   if (!sampleCanvas) return null;
   const rects = roiRects(landmarks);
@@ -103,13 +114,15 @@ export function sampleFace(landmarks) {
 
     const data = sampleCtx.getImageData(cx, cy, cw, ch).data;
     for (let i = 0; i < data.length; i += 4) {
-      sumR += data[i];
-      sumG += data[i + 1];
-      sumB += data[i + 2];
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      if (!isSkin(r, g, b)) continue;
+      sumR += r;
+      sumG += g;
+      sumB += b;
       count++;
     }
   }
 
-  if (count === 0) return null;
+  if (count < MIN_SKIN_PIXELS) return null;
   return { r: sumR / count, g: sumG / count, b: sumB / count };
 }

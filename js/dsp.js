@@ -158,3 +158,84 @@ function parabolicPeakHz(freqs, power, i) {
   const df = freqs[1] - freqs[0];
   return freqs[i] + delta * df;
 }
+
+// Linear-resample irregular samples (values v at times t, seconds) onto a
+// uniform grid at `fs` Hz spanning [t[0], t[last]]. rAF frame timing is jittery,
+// which smears the spectrum; resampling first sharpens the heart-rate peak.
+export function resampleUniform(t, v, fs) {
+  const n = t.length;
+  if (n < 2) return Float64Array.from(v);
+  const span = t[n - 1] - t[0];
+  const m = Math.max(2, Math.floor(span * fs) + 1);
+  const out = new Float64Array(m);
+  let j = 0;
+  for (let i = 0; i < m; i++) {
+    const tt = t[0] + i / fs;
+    while (j < n - 2 && t[j + 1] < tt) j++;
+    const ta = t[j], tb = t[j + 1];
+    const frac = tb > ta ? (tt - ta) / (tb - ta) : 0;
+    out[i] = v[j] + frac * (v[j + 1] - v[j]);
+  }
+  return out;
+}
+
+// Welch power spectrum: average the periodograms of overlapping, Hann-windowed
+// segments. Reduces spectral variance for a steadier estimate. Each segment is
+// zero-padded to `nfft` for fine bin spacing (spectral interpolation).
+export function welchSpectrum(signal, fs, segLen, step, nfft) {
+  segLen = Math.min(segLen, signal.length);
+  nfft = nextPow2(Math.max(nfft, segLen));
+  const half = nfft >> 1;
+  const power = new Float64Array(half);
+  const win = hann(segLen);
+  let segs = 0;
+  for (let start = 0; start + segLen <= signal.length; start += step) {
+    const seg = detrend(signal.subarray(start, start + segLen));
+    const re = new Float64Array(nfft);
+    const im = new Float64Array(nfft);
+    for (let i = 0; i < segLen; i++) re[i] = seg[i] * win[i];
+    fft(re, im);
+    for (let i = 0; i < half; i++) power[i] += re[i] * re[i] + im[i] * im[i];
+    segs++;
+  }
+  if (segs === 0) {
+    // Signal shorter than one segment — fall back to a single periodogram.
+    return powerSpectrum(applyWindow(detrend(signal), hann(signal.length)), fs);
+  }
+  for (let i = 0; i < half; i++) power[i] /= segs;
+  const freqs = new Float64Array(half);
+  for (let i = 0; i < half; i++) freqs[i] = (i * fs) / nfft;
+  return { freqs, power };
+}
+
+// Total spectral energy within [fMin, fMax].
+export function bandEnergy(freqs, power, fMin = HR_MIN_HZ, fMax = HR_MAX_HZ) {
+  let e = 0;
+  for (let i = 0; i < freqs.length; i++) {
+    if (freqs[i] >= fMin && freqs[i] <= fMax) e += power[i];
+  }
+  return e;
+}
+
+// Top-k in-band spectral peaks as { freq, power }, strongest first. Uses
+// parabolic interpolation for sub-bin frequency accuracy. Falls back to the
+// single in-band maximum if no local maxima are present.
+export function findBandPeaks(freqs, power, fMin = HR_MIN_HZ, fMax = HR_MAX_HZ, k = 3) {
+  const peaks = [];
+  for (let i = 1; i < freqs.length - 1; i++) {
+    if (freqs[i] < fMin || freqs[i] > fMax) continue;
+    if (power[i] > power[i - 1] && power[i] >= power[i + 1]) {
+      peaks.push({ freq: parabolicPeakHz(freqs, power, i), power: power[i] });
+    }
+  }
+  if (!peaks.length) {
+    let bi = -1, bv = -Infinity;
+    for (let i = 0; i < freqs.length; i++) {
+      if (freqs[i] < fMin || freqs[i] > fMax) continue;
+      if (power[i] > bv) { bv = power[i]; bi = i; }
+    }
+    if (bi >= 0) peaks.push({ freq: freqs[bi], power: bv });
+  }
+  peaks.sort((a, b) => b.power - a.power);
+  return peaks.slice(0, k);
+}

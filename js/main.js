@@ -49,7 +49,12 @@ async function start() {
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        frameRate: { ideal: 30 },
+        facingMode: 'user',
+      },
       audio: false,
     });
   } catch (err) {
@@ -60,6 +65,7 @@ async function start() {
 
   els.video.srcObject = stream;
   await els.video.play();
+  await lockCameraAuto(stream);
 
   setStatus('Loading face model…');
   try {
@@ -74,6 +80,37 @@ async function start() {
   setStatus('Hold still and well-lit. Estimating… (≈10 s warm-up)');
   running = true;
   requestAnimationFrame(loop);
+}
+
+// Auto-exposure and auto-white-balance continuously "correct" the very
+// brightness/color changes rPPG measures, fighting the signal. Lock them to
+// manual where the browser/camera supports it. Best-effort: ignore failures.
+async function lockCameraAuto(stream) {
+  const track = stream.getVideoTracks()[0];
+  if (!track || !track.getCapabilities) return;
+  let caps = {};
+  try {
+    caps = track.getCapabilities();
+  } catch {
+    return;
+  }
+  const advanced = [];
+  if (caps.exposureMode && caps.exposureMode.includes('manual')) {
+    advanced.push({ exposureMode: 'manual' });
+  }
+  if (caps.whiteBalanceMode && caps.whiteBalanceMode.includes('manual')) {
+    advanced.push({ whiteBalanceMode: 'manual' });
+  }
+  if (caps.focusMode && caps.focusMode.includes('manual')) {
+    advanced.push({ focusMode: 'manual' });
+  }
+  if (!advanced.length) return;
+  try {
+    await track.applyConstraints({ advanced });
+    console.log('Locked camera auto-controls:', advanced);
+  } catch (err) {
+    console.warn('Could not lock camera auto-controls:', err.message);
+  }
 }
 
 function sizeCanvases() {

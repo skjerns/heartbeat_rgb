@@ -6,7 +6,13 @@
 // land within tolerance of the truth. Run via index.html?selftest=1.
 
 import { pos } from './rppg.js';
-import { estimateBpm } from './dsp.js';
+import {
+  estimateBpm,
+  resampleUniform,
+  welchSpectrum,
+  findBandPeaks,
+  nextPow2,
+} from './dsp.js';
 
 function synth({ bpm, fs, seconds, seed = 1 }) {
   const f = bpm / 60;
@@ -48,6 +54,44 @@ function check(name, trueBpm, tol = 2.5) {
   return ok;
 }
 
+// End-to-end check of the improved pipeline: synthesize RGB, jitter the frame
+// timestamps (as rAF does), resample to a uniform grid, run POS, then recover
+// the rate with the Welch spectrum + peak finder used at runtime.
+function checkPipeline(name, trueBpm, tol = 2.5) {
+  const fps = 30;
+  const seconds = 14;
+  const { r, g, b } = synth({ bpm: trueBpm, fs: fps, seconds, seed: 7 });
+  // Build jittered timestamps (±35% of a frame interval).
+  let jit = 123;
+  const jrand = () => {
+    jit = (jit * 1103515245 + 12345) & 0x7fffffff;
+    return jit / 0x7fffffff - 0.5;
+  };
+  const t = new Float64Array(r.length);
+  let acc = 0;
+  for (let i = 0; i < r.length; i++) {
+    t[i] = acc;
+    acc += (1 / fps) * (1 + 0.7 * jrand());
+  }
+  const fs = 30;
+  const ru = resampleUniform(t, r, fs);
+  const gu = resampleUniform(t, g, fs);
+  const bu = resampleUniform(t, b, fs);
+  const pulse = pos(ru, gu, bu);
+  const segLen = Math.round(7 * fs);
+  const { freqs, power } = welchSpectrum(pulse, fs, segLen, Math.round(segLen / 2), nextPow2(segLen * 4));
+  const peaks = findBandPeaks(freqs, power, 0.7, 4, 4);
+  const bpm = peaks.length ? peaks[0].freq * 60 : null;
+  const err = bpm == null ? Infinity : Math.abs(bpm - trueBpm);
+  const ok = err <= tol;
+  console.log(
+    `%c${ok ? 'PASS' : 'FAIL'}%c ${name}: true=${trueBpm} got=${bpm == null ? 'null' : bpm.toFixed(1)} err=${err.toFixed(2)}`,
+    `font-weight:bold;color:${ok ? '#16a34a' : '#dc2626'}`,
+    'color:inherit',
+  );
+  return ok;
+}
+
 export function runSelfTest() {
   console.log('%c== rPPG DSP self-test ==', 'font-weight:bold');
   const results = [
@@ -55,6 +99,8 @@ export function runSelfTest() {
     check('72 BPM (typical)', 72),
     check('100 BPM (elevated)', 100),
     check('150 BPM (exercise)', 150),
+    checkPipeline('72 BPM (jittered+resample+Welch)', 72),
+    checkPipeline('108 BPM (jittered+resample+Welch)', 108),
   ];
   const passed = results.filter(Boolean).length;
   const allOk = passed === results.length;
