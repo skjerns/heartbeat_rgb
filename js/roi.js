@@ -86,11 +86,13 @@ function isSkin(r, g, b) {
   return cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173 && y > 40 && y < 250;
 }
 
-const MIN_SKIN_PIXELS = 40; // require enough skin to trust the sample
+const MIN_SKIN_PIXELS = 40; // enough skin pixels to trust the skin-only mean
 
-// Sample mean RGB over the given face's ROIs from the current sampling canvas,
-// averaging only skin-colored pixels. Returns { r, g, b } in 0..255, or null if
-// the regions are degenerate / off frame / lack enough visible skin.
+// Sample mean RGB over the given face's ROIs from the current sampling canvas.
+// Prefers an average over skin-colored pixels, but falls back to averaging the
+// whole ROI if the skin test matches too few pixels (so a mis-tuned skin range
+// or unusual lighting/skin tone never starves the signal). Returns { r, g, b }
+// in 0..255, or null only if the regions are entirely off-frame.
 export function sampleFace(landmarks) {
   if (!sampleCanvas) return null;
   const rects = roiRects(landmarks);
@@ -98,7 +100,8 @@ export function sampleFace(landmarks) {
 
   const W = sampleCanvas.width;
   const H = sampleCanvas.height;
-  let sumR = 0, sumG = 0, sumB = 0, count = 0;
+  let skinR = 0, skinG = 0, skinB = 0, skinN = 0;
+  let allR = 0, allG = 0, allB = 0, allN = 0;
 
   for (const rect of rects) {
     const x0 = Math.round(rect.x * W);
@@ -115,14 +118,18 @@ export function sampleFace(landmarks) {
     const data = sampleCtx.getImageData(cx, cy, cw, ch).data;
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i], g = data[i + 1], b = data[i + 2];
-      if (!isSkin(r, g, b)) continue;
-      sumR += r;
-      sumG += g;
-      sumB += b;
-      count++;
+      allR += r; allG += g; allB += b; allN++;
+      if (isSkin(r, g, b)) {
+        skinR += r; skinG += g; skinB += b; skinN++;
+      }
     }
   }
 
-  if (count < MIN_SKIN_PIXELS) return null;
-  return { r: sumR / count, g: sumG / count, b: sumB / count };
+  if (skinN >= MIN_SKIN_PIXELS) {
+    return { r: skinR / skinN, g: skinG / skinN, b: skinB / skinN };
+  }
+  if (allN > 0) {
+    return { r: allR / allN, g: allG / allN, b: allB / allN };
+  }
+  return null;
 }
